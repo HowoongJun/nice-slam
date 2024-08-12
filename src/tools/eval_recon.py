@@ -6,6 +6,7 @@ import open3d as o3d
 import torch
 import trimesh
 from scipy.spatial import cKDTree as KDTree
+import cv2
 
 
 def normalize(x):
@@ -208,6 +209,85 @@ def calc_2d_metric(rec_meshfile, gt_meshfile, align=True, n_imgs=1000):
     errors = np.array(errors)
     # from m to cm
     print('Depth L1: ', errors.mean()*100)
+
+def render_image(rec_meshfile, gt_meshfile, c2w, align=True):
+    """
+    2D reconstruction metric, depth L1 loss.
+
+    """
+    H = 500
+    W = 500
+    focal = 300
+    fx = focal
+    fy = focal
+    cx = H/2.0-0.5
+    cy = W/2.0-0.5
+
+    gt_mesh = o3d.io.read_triangle_mesh(gt_meshfile)
+    rec_mesh = o3d.io.read_triangle_mesh(rec_meshfile)
+    unseen_gt_pointcloud_file = gt_meshfile.replace('.ply', '_pc_unseen.npy')
+    pc_unseen = np.load(unseen_gt_pointcloud_file)
+    if align:
+        transformation = get_align_transformation(rec_meshfile, gt_meshfile)
+        rec_mesh = rec_mesh.transform(transformation)
+
+    # get vacant area inside the room
+    extents, transform = get_cam_position(gt_meshfile)
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(width=W, height=H, visible=False)
+    vis.get_render_option().mesh_show_back_face = True
+    while True:
+        # sample view, and check if unseen region is not inside the camera view
+        # if inside, then needs to resample
+        up = [0, 0, -1]
+        origin = trimesh.sample.volume_rectangular(
+            extents, 1, transform=transform)
+        origin = origin.reshape(-1)
+        tx = round(random.uniform(-10000, +10000), 2)
+        ty = round(random.uniform(-10000, +10000), 2)
+        tz = round(random.uniform(-10000, +10000), 2)
+        target = [tx, ty, tz]
+        target = np.array(target)-np.array(origin)
+        c2w = viewmatrix(target, up, origin)
+        tmp = np.eye(4)
+        tmp[:3, :] = c2w
+        c2w = tmp
+        seen = check_proj(pc_unseen, W, H, fx, fy, cx, cy, c2w)
+        if (~seen):
+            break
+
+    param = o3d.camera.PinholeCameraParameters()
+    param.extrinsic = np.linalg.inv(c2w)  # 4x4 numpy array
+
+    param.intrinsic = o3d.camera.PinholeCameraIntrinsic(
+        W, H, fx, fy, cx, cy)
+
+    ctr = vis.get_view_control()
+    ctr.set_constant_z_far(20)
+    ctr.convert_from_pinhole_camera_parameters(param)
+
+    vis.add_geometry(gt_mesh, reset_bounding_box=True,)
+    ctr.convert_from_pinhole_camera_parameters(param)
+    vis.poll_events()
+    vis.update_renderer()
+    gt_depth = vis.capture_depth_float_buffer(True)
+    gt_depth = np.asarray(gt_depth)
+    vis.remove_geometry(gt_mesh, reset_bounding_box=True,)
+
+    vis.add_geometry(rec_mesh, reset_bounding_box=True,)
+    ctr.convert_from_pinhole_camera_parameters(param)
+    vis.poll_events()
+    vis.update_renderer()
+    image = vis.capture_screen_float_buffer(do_render=True)
+    image_np = cv2.cvtColor(np.asarray(image) * 255, cv2.COLOR_BGR2RGB)
+    cv2.imwrite("rgb_mesh.png", image_np)
+    ours_depth = vis.capture_depth_float_buffer(True)
+    ours_depth = np.asarray(ours_depth)
+    vis.remove_geometry(rec_mesh, reset_bounding_box=True,)
+
+    vis.destroy_window()
+
 
 
 if __name__ == '__main__':

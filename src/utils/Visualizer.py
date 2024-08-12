@@ -49,7 +49,6 @@ class Visualizer(object):
                     c2w = torch.cat([c2w, bottom], dim=0)
                 else:
                     c2w = c2w_or_camera_tensor
-                print(c)
                 depth, uncertainty, color = self.renderer.render_img(
                     c,
                     decoders,
@@ -83,7 +82,6 @@ class Visualizer(object):
                 axs[0, 2].set_xticks([])
                 axs[0, 2].set_yticks([])
                 gt_color_np = np.clip(gt_color_np, 0, 1)
-                print(color_np)
                 color_np = np.clip(color_np, 0, 1)
                 color_residual = np.clip(color_residual, 0, 1)
                 axs[1, 0].imshow(gt_color_np, cmap="plasma")

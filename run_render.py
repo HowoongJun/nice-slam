@@ -6,6 +6,7 @@ import torch, cv2
 
 from src import config
 from src.NICE_SLAM import NICE_SLAM
+from src.tools.eval_recon import render_image
 
 
 def setup_seed(seed):
@@ -37,13 +38,18 @@ def main():
         args.config, 'configs/nice_slam.yaml' if args.nice else 'configs/imap.yaml')
 
     slam = NICE_SLAM(cfg, args)
-
-    depth, uncertainty, rgb = slam.render(1000)
+    idx = 1530
+    depth, uncertainty, rgb = slam.render(idx)
     color = rgb.detach().cpu().numpy()
     color_np = np.clip(color, 0, 1)
-    cv2.imwrite("rgb.png", color_np * 255)
+    cv2.imwrite("rgb.png", cv2.cvtColor(color_np * 255, cv2.COLOR_BGR2RGB))
+    depth = depth.detach().cpu().numpy()
+    max_depth = np.max(depth)
+    cv2.imwrite("depth.png", depth / max_depth * 255)
     # slam.run()
 
+    # c2w = slam.gt_c2w_list[idx].detach().cpu().numpy()
+    # render_image("./output/Replica/office2/mesh/final_mesh_eval_rec.ply", "cull_replica_mesh/office2.ply", c2w, False)
 
 if __name__ == '__main__':
     main()
