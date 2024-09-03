@@ -49,7 +49,7 @@ def main():
     # slam.run()
 
     # c2w = slam.gt_c2w_list[idx].detach().cpu().numpy()
-    # render_image("./output/Replica/office2/mesh/final_mesh_eval_rec.ply", "cull_replica_mesh/office2.ply", c2w, False)
+    # render_image("./output/Replica/office2_imap/mesh/final_mesh_eval_rec.ply", "/root/Dataset/Replica/office2_mesh.ply", c2w, False)
 
 if __name__ == '__main__':
     main()

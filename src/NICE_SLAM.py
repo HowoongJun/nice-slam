@@ -266,7 +266,7 @@ class NICE_SLAM():
                 ckpt = torch.load(ckpt_path, map_location=torch.device('cuda'))
                 c = ckpt['c']
                 self.gt_c2w_list = ckpt['gt_c2w_list']
-                self.gt_c2w_list[:, :3, 3] /= self.cfg['scale']
+                # self.gt_c2w_list[:, :3, 3] /= self.cfg['scale']
                 self.shared_decoders.load_state_dict(ckpt['decoder_state_dict'])
         with torch.no_grad():
             ret = self.renderer.render_img(c, self.shared_decoders, self.gt_c2w_list[idx].to("cuda"), self.cfg['mapping']['device'], 'color')
