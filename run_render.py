@@ -33,6 +33,8 @@ def main():
                         help='input folder, this have higher priority, can overwrite the one in config file')
     parser.add_argument('--output', type=str,
                         help='output folder, this have higher priority, can overwrite the one in config file')
+    parser.add_argument('--idx', type=int, help='index of the image to render')
+    parser.add_argument('--render_style', type=str, help='render style: mesh | nerf', default='mesh')
     nice_parser = parser.add_mutually_exclusive_group(required=False)
     nice_parser.add_argument('--nice', dest='nice', action='store_true')
     nice_parser.add_argument('--imap', dest='nice', action='store_false')
@@ -43,11 +45,18 @@ def main():
         args.config, 'configs/nice_slam.yaml' if args.nice else 'configs/imap.yaml')
 
     slam = NICE_SLAM(cfg, args)
-    idx = 1500
+    idx = args.idx
     strInputFolder =cfg['data']['input_folder']
+    strOutputFolder = cfg['data']['output']
     oSourceImg = cv2.imread(strInputFolder + "/results/frame" + str(idx).zfill(6) + ".jpg")
-
-    depth, uncertainty, rgb = slam.render(idx)
+    strDataName = cfg['data']['input_folder'].split("/")[-1]
+    if args.render_style == 'mesh':
+        c2w = slam.gt_c2w_list[idx].detach().cpu().numpy()
+        strFinalMeshEvalRecPath = strOutputFolder + "/mesh/final_mesh_eval_rec.ply"
+        strMeshFile = "/root/Dataset/Replica/" + strDataName + "_mesh.ply"
+        rgb, depth = render_image(strFinalMeshEvalRecPath, strMeshFile, c2w, False)
+    else:
+        depth, uncertainty, rgb = slam.render(idx)
     color = rgb.detach().cpu().numpy()
     color_np = np.clip(color, 0, 1) * 255
 
@@ -62,10 +71,10 @@ def main():
     vKpSetSource, vSourceDesc, _ = oLocalFeature.Read()
     oLocalFeature.Reset()
 
-    cv2.imwrite("rgb.png", cv2.cvtColor(color_np * 255, cv2.COLOR_BGR2RGB))
+    cv2.imwrite(strOutputFolder + "/" + str(idx).zfill(6) + "_rgb.png", cv2.cvtColor(color_np, cv2.COLOR_BGR2RGB))
     depth = depth.detach().cpu().numpy()
     max_depth = np.max(depth)
-    cv2.imwrite("depth.png", depth / max_depth * 255)
+    cv2.imwrite(strOutputFolder + "/" + str(idx).zfill(6) + "_depth.png", depth / max_depth * 255)
     vMatches = oMatcher.match(vTargetDesc, vSourceDesc)
 
     oMatchesMask = []
@@ -75,23 +84,22 @@ def main():
         _, oMatchesMask = cv2.findHomography(vKpSetQuery, vKpSetRender, cv2.RANSAC, 3.0)
 
     vMatchesMask = []
-    for idx, mask in enumerate(oMatchesMask):
+    for _, mask in enumerate(oMatchesMask):
         if(mask[0] == 1):
             vMatchesMask.append(1)
         else:
             vMatchesMask.append(0)
-    oImgMatch = cv2.drawMatches(cv2.convertScaleAbs(oSourceImg), 
+    oImgMatch = cv2.drawMatches(cv2.convertScaleAbs(color_np), 
                                         vTargetKpt, 
-                                        cv2.convertScaleAbs(color_np), 
+                                        cv2.convertScaleAbs(oSourceImg), 
                                         vKpSetSource,
                                         vMatches, 
                                         None, 
                                         matchColor=(0, 255, 0), 
                                         singlePointColor=(0, 0, 255), 
                                         matchesMask=vMatchesMask, flags=0)
-    cv2.imwrite("matches.png", oImgMatch)
-    # c2w = slam.gt_c2w_list[idx].detach().cpu().numpy()
-    # render_image("./output/Replica/office2_imap/mesh/final_mesh_eval_rec.ply", "/root/Dataset/Replica/office2_mesh.ply", c2w, False)
+    cv2.imwrite(strOutputFolder + "/" + str(idx).zfill(6) + "_matche.png", oImgMatch)
+
 
 if __name__ == '__main__':
     main()

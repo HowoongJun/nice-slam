@@ -281,12 +281,14 @@ def render_image(rec_meshfile, gt_meshfile, c2w, align=True):
     vis.update_renderer()
     image = vis.capture_screen_float_buffer(do_render=True)
     image_np = cv2.cvtColor(np.asarray(image) * 255, cv2.COLOR_BGR2RGB)
-    cv2.imwrite("rgb_mesh.png", image_np)
+    
     ours_depth = vis.capture_depth_float_buffer(True)
     ours_depth = np.asarray(ours_depth)
     vis.remove_geometry(rec_mesh, reset_bounding_box=True,)
 
     vis.destroy_window()
+
+    return image_np, ours_depth
 
 
 
