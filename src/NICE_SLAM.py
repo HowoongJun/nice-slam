@@ -251,11 +251,11 @@ class NICE_SLAM():
 
         self.shared_c = c
 
-    def render(self, idx):
+    def render(self, idx, depth=None):
         """
         Render the mesh and save the mesh and images.
         """
-
+        gt_depth = torch.from_numpy(depth).to(self.cfg['mapping']['device'])
         ckptsdir = self.cfg['data']['output'] + '/ckpts'
         if os.path.exists(ckptsdir):
             ckpts = [os.path.join(ckptsdir, f)
@@ -269,11 +269,32 @@ class NICE_SLAM():
                 # self.gt_c2w_list[:, :3, 3] /= self.cfg['scale']
                 self.shared_decoders.load_state_dict(ckpt['decoder_state_dict'])
         with torch.no_grad():
-            ret = self.renderer.render_img(c, self.shared_decoders, self.gt_c2w_list[idx].to("cuda"), self.cfg['mapping']['device'], 'color')
+            ret = self.renderer.render_img(
+                c, 
+                self.shared_decoders, 
+                self.gt_c2w_list[idx].to("cuda"), 
+                self.cfg['mapping']['device'], 
+                'color',
+                gt_depth=gt_depth
+            )
 
         return ret
         
-
+    def get_gt_c2w_list(self, idx):
+        ckptsdir = self.cfg['data']['output'] + '/ckpts'
+        if os.path.exists(ckptsdir):
+            ckpts = [os.path.join(ckptsdir, f)
+                    for f in sorted(os.listdir(ckptsdir)) if 'tar' in f]
+            if len(ckpts) > 0:
+                ckpt_path = ckpts[-1]
+                ckpt = torch.load(ckpt_path, map_location=torch.device('cuda'))
+                self.gt_c2w_list= ckpt['gt_c2w_list']
+                self.gt_c2w_list[:, :3, 3] /= self.cfg['scale']
+                return self.gt_c2w_list[idx]
+        else:
+            print("No ckpts found" + ckptsdir)
+            return None
+            
     def tracking(self, rank):
         """
         Tracking Thread.

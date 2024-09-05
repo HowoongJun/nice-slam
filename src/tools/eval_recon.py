@@ -215,53 +215,29 @@ def render_image(rec_meshfile, gt_meshfile, c2w, align=True):
     2D reconstruction metric, depth L1 loss.
 
     """
-    H = 500
-    W = 500
-    focal = 300
+    H = 680
+    W = 1200
+    focal = 600.0
     fx = focal
     fy = focal
-    cx = H/2.0-0.5
-    cy = W/2.0-0.5
+    cx = 599.5 #W / 2.0 - 0.5
+    cy = 339.5 #H / 2.0 - 0.5
 
     gt_mesh = o3d.io.read_triangle_mesh(gt_meshfile)
     rec_mesh = o3d.io.read_triangle_mesh(rec_meshfile)
-    unseen_gt_pointcloud_file = gt_meshfile.replace('.ply', '_pc_unseen.npy')
-    pc_unseen = np.load(unseen_gt_pointcloud_file)
+    
     if align:
         transformation = get_align_transformation(rec_meshfile, gt_meshfile)
         rec_mesh = rec_mesh.transform(transformation)
 
-    # get vacant area inside the room
-    extents, transform = get_cam_position(gt_meshfile)
-
     vis = o3d.visualization.Visualizer()
     vis.create_window(width=W, height=H, visible=False)
     vis.get_render_option().mesh_show_back_face = True
-    while True:
-        # sample view, and check if unseen region is not inside the camera view
-        # if inside, then needs to resample
-        up = [0, 0, -1]
-        origin = trimesh.sample.volume_rectangular(
-            extents, 1, transform=transform)
-        origin = origin.reshape(-1)
-        tx = round(random.uniform(-10000, +10000), 2)
-        ty = round(random.uniform(-10000, +10000), 2)
-        tz = round(random.uniform(-10000, +10000), 2)
-        target = [tx, ty, tz]
-        target = np.array(target)-np.array(origin)
-        c2w = viewmatrix(target, up, origin)
-        tmp = np.eye(4)
-        tmp[:3, :] = c2w
-        c2w = tmp
-        seen = check_proj(pc_unseen, W, H, fx, fy, cx, cy, c2w)
-        if (~seen):
-            break
 
     param = o3d.camera.PinholeCameraParameters()
+    c2w = c2w.T
     param.extrinsic = np.linalg.inv(c2w)  # 4x4 numpy array
-
-    param.intrinsic = o3d.camera.PinholeCameraIntrinsic(
-        W, H, fx, fy, cx, cy)
+    param.intrinsic = o3d.camera.PinholeCameraIntrinsic(W, H, fx, fy, cx, cy)
 
     ctr = vis.get_view_control()
     ctr.set_constant_z_far(20)

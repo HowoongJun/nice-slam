@@ -57,16 +57,18 @@ def main():
         os.makedirs(strOutputFolder)
     for idx in range(from_idx, to_idx):
         oSourceImg = cv2.imread(strInputFolder + "/results/frame" + str(idx).zfill(6) + ".jpg")
+        oSourceDepth = cv2.imread(strInputFolder + "/results/depth" + str(idx).zfill(6) + ".png", cv2.IMREAD_UNCHANGED).astype(np.float32) / cfg['cam']['png_depth_scale']
         strDataName = cfg['data']['input_folder'].split("/")[-1]
         if args.render_style == 'mesh':
-            c2w = slam.gt_c2w_list[idx].detach().cpu().numpy()
-            strFinalMeshEvalRecPath = strOutputFolder + "/mesh/final_mesh_eval_rec.ply"
-            strMeshFile = "/root/Dataset/Replica/" + strDataName + "_mesh.ply"
-            rgb, depth = render_image(strFinalMeshEvalRecPath, strMeshFile, c2w, False)
+            c2w = slam.get_gt_c2w_list(idx).detach().cpu().numpy()
+            strFinalMeshEvalRecPath = cfg['data']['output'] + "/mesh/final_mesh_eval_rec.ply"
+            strGtMeshFile = "cull_replica_mesh/" + strDataName + ".ply"
+            color_np, depth = render_image(strFinalMeshEvalRecPath, strGtMeshFile, c2w, True)
         else:
-            depth, uncertainty, rgb = slam.render(idx)
-        color = rgb.detach().cpu().numpy()
-        color_np = np.clip(color, 0, 1) * 255
+            depth, uncertainty, rgb = slam.render(idx, oSourceDepth)
+            color = rgb.detach().cpu().numpy()
+            depth = depth.detach().cpu().numpy()
+            color_np = np.clip(color, 0, 1) * 255
 
         oLocalFeature = CVisualLocLocal(str("eventpointnet"))
         oLocalFeature.Open("match", True)
@@ -80,23 +82,25 @@ def main():
         oLocalFeature.Reset()
 
         cv2.imwrite(strOutputFolder + "/rgb_" + str(idx).zfill(6) + ".png", cv2.cvtColor(color_np, cv2.COLOR_BGR2RGB))
-        depth = depth.detach().cpu().numpy()
         max_depth = np.max(depth)
         cv2.imwrite(strOutputFolder + "/depth_" + str(idx).zfill(6) + ".png", depth / max_depth * 255)
-        vMatches = oMatcher.match(vTargetDesc, vSourceDesc)
+        if(len(vTargetDesc) > 0 and len(vSourceDesc) > 0):
+            vMatches = oMatcher.match(vTargetDesc, vSourceDesc)
 
-        oMatchesMask = []
-        vKpSetQuery = np.float32([vKpSetSource[m.trainIdx].pt for m in vMatches]).reshape(-1, 1, 2)
-        vKpSetRender = np.float32([vTargetKpt[m.queryIdx].pt for m in vMatches]).reshape(-1, 1, 2)
-        if(len(vKpSetRender) > 5):
-            _, oMatchesMask = cv2.findHomography(vKpSetQuery, vKpSetRender, cv2.RANSAC, 3.0)
+            oMatchesMask = []
+            vKpSetQuery = np.float32([vKpSetSource[m.trainIdx].pt for m in vMatches]).reshape(-1, 1, 2)
+            vKpSetRender = np.float32([vTargetKpt[m.queryIdx].pt for m in vMatches]).reshape(-1, 1, 2)
+            if(len(vKpSetRender) > 5):
+                _, oMatchesMask = cv2.findHomography(vKpSetQuery, vKpSetRender, cv2.RANSAC, 3.0)
 
-        vMatchesMask = []
-        for _, mask in enumerate(oMatchesMask):
-            if(mask[0] == 1):
-                vMatchesMask.append(1)
-            else:
-                vMatchesMask.append(0)
+            vMatchesMask = []
+            for _, mask in enumerate(oMatchesMask):
+                if(mask[0] == 1):
+                    vMatchesMask.append(1)
+                else:
+                    vMatchesMask.append(0)
+        else:
+            vMatches = None
         oImgMatch = cv2.drawMatches(cv2.convertScaleAbs(color_np), 
                                             vTargetKpt, 
                                             cv2.convertScaleAbs(oSourceImg), 
