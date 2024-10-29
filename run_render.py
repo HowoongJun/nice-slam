@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 import torch, cv2, os
+from tqdm import tqdm
 
 from src import config
 from src.NICE_SLAM import NICE_SLAM
@@ -34,7 +35,7 @@ def main():
     parser.add_argument('--output', type=str,
                         help='output folder, this have higher priority, can overwrite the one in config file')
     parser.add_argument('--idx', type=int, help='index of the image to render')
-    parser.add_argument('--render_style', type=str, help='render style: mesh | nerf', default='mesh')
+    parser.add_argument('--render_style', type=str, help='render style: mesh | nerf', default='nerf')
     nice_parser = parser.add_mutually_exclusive_group(required=False)
     nice_parser.add_argument('--nice', dest='nice', action='store_true')
     nice_parser.add_argument('--imap', dest='nice', action='store_false')
@@ -43,7 +44,7 @@ def main():
 
     cfg = config.load_config(
         args.config, 'configs/nice_slam.yaml' if args.nice else 'configs/imap.yaml')
-
+    
     slam = NICE_SLAM(cfg, args)
     if(args.idx == -1):
         from_idx = 0
@@ -55,7 +56,7 @@ def main():
     strOutputFolder = cfg['data']['output'] + "/render/" + str(args.render_style)
     if(not os.path.exists(strOutputFolder)):
         os.makedirs(strOutputFolder)
-    for idx in range(from_idx, to_idx):
+    for idx in tqdm(range(from_idx, to_idx)):
         oSourceImg = cv2.imread(strInputFolder + "/results/frame" + str(idx).zfill(6) + ".jpg")
         oSourceDepth = cv2.imread(strInputFolder + "/results/depth" + str(idx).zfill(6) + ".png", cv2.IMREAD_UNCHANGED).astype(np.float32) / cfg['cam']['png_depth_scale']
         strDataName = cfg['data']['input_folder'].split("/")[-1]
